@@ -6,6 +6,8 @@ A Raspberry Pi display for the [Pimoroni Inky Impression 7.3"](https://shop.pimo
 - Press any of the four buttons to refresh immediately
 - Randomly selects a quote and image each time
 
+![Quotes](IMG_4370.jpeg)
+
 ---
 
 ## Requirements
