@@ -1,10 +1,10 @@
 #!/bin/bash
 # install.sh — Quaker Display installer for Inky Impression 7.3"
-# Run with: bash install.sh
+# Run with: bash install.sh from inside the repo directory
 
 set -e
 
-INSTALL_DIR="/home/$USER/inkyquotescreen"
+INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="$INSTALL_DIR/venv"
 
 echo ""
@@ -19,50 +19,40 @@ if [ "$EUID" -eq 0 ]; then
   exit 1
 fi
 
-# --- Copy files to install directory ---
-echo "[1/6] Copying files to $INSTALL_DIR..."
+echo "[1/5] Setting up directories..."
 mkdir -p "$INSTALL_DIR/quotes/images"
-cp quaker_display.py "$INSTALL_DIR/"
-
 if [ ! -f "$INSTALL_DIR/quotes/quotes.json" ]; then
-  cp quotes/quotes.json "$INSTALL_DIR/quotes/quotes.json"
-  echo "      Sample quotes.json installed."
-else
-  echo "      quotes.json already exists — skipping to preserve your quotes."
+  echo "      No quotes.json found — please add one to $INSTALL_DIR/quotes/"
 fi
-
-echo "      Drop your images into: $INSTALL_DIR/quotes/images/"
+echo "      Install directory: $INSTALL_DIR"
 echo ""
 
 # --- Create virtual environment ---
-echo "[2/6] Creating Python virtual environment..."
+echo "[2/5] Creating Python virtual environment..."
+rm -rf "$VENV_DIR"
 python3 -m venv "$VENV_DIR"
 echo ""
 
 # --- Install Python dependencies ---
-echo "[3/6] Installing Python dependencies..."
+echo "[3/5] Installing Python dependencies..."
 "$VENV_DIR/bin/pip" install --upgrade pip --quiet
 "$VENV_DIR/bin/pip" install inky pillow gpiozero --quiet
 echo ""
 
-# --- Install systemd files with real username and paths substituted ---
-echo "[4/6] Installing systemd service and timer..."
+# --- Install systemd files ---
+echo "[4/5] Installing systemd service and timer..."
 sed "s|\$USER|$USER|g; s|\$INSTALL_DIR|$INSTALL_DIR|g" \
-  systemd/quaker-display.service | sudo tee /etc/systemd/system/quaker-display.service > /dev/null
-sudo cp systemd/quaker-refresh.service /etc/systemd/system/
-sudo cp systemd/quaker-display.timer /etc/systemd/system/
+  "$INSTALL_DIR/systemd/quaker-display.service" | sudo tee /etc/systemd/system/quaker-display.service > /dev/null
+sudo cp "$INSTALL_DIR/systemd/quaker-refresh.service" /etc/systemd/system/
+sudo cp "$INSTALL_DIR/systemd/quaker-display.timer" /etc/systemd/system/
 echo ""
 
 # --- Reload systemd and enable ---
-echo "[5/6] Enabling service and timer..."
+echo "[5/5] Enabling and starting service..."
 sudo systemctl daemon-reload
 sudo systemctl enable quaker-display.service
 sudo systemctl enable quaker-display.timer
-echo ""
-
-# --- Start everything ---
-echo "[6/6] Starting service..."
-sudo systemctl start quaker-display.service
+sudo systemctl restart quaker-display.service
 sudo systemctl start quaker-display.timer
 echo ""
 
