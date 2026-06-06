@@ -14,7 +14,7 @@ import signal
 import threading
 from PIL import Image, ImageDraw, ImageFont
 from inky.auto import auto
-from gpiozero import Button
+import gpiod
 
 # --- Configuration ---
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -170,15 +170,15 @@ def update_display():
     print("Done.")
 
 
-def handle_button(btn):
+def handle_button(pin):
     global _updating
     with _update_lock:
         if _updating:
-            print(f"Button GPIO {btn.pin.number} — ignored, update in progress")
+            print(f"Button GPIO {pin} — ignored, update in progress")
             return
         _updating = True
     try:
-        print(f"Button pressed on GPIO {btn.pin.number} — refreshing display")
+        print(f"Button pressed on GPIO {pin} — refreshing display")
         update_display()
     finally:
         with _update_lock:
@@ -200,14 +200,31 @@ def handle_sigusr1(signum, frame):
             _updating = False
 
 
+def button_listener():
+    """Watch GPIO pins for button presses in a background thread."""
+    try:
+        chip = gpiod.Chip('gpiochip0')
+        lines = chip.get_lines(BUTTONS)
+        lines.request(consumer='quaker-display', type=gpiod.LINE_REQ_EV_FALLING_EDGE)
+
+        while True:
+            events = lines.event_wait(sec=1)
+            if events:
+                for line in events:
+                    line.event_read()
+                    handle_button(line.offset())
+    except Exception as e:
+        print(f"Button listener error: {e}")
+        print("Continuing without button support.")
+
+
 def main():
     signal.signal(signal.SIGUSR1, handle_sigusr1)
 
     update_display()
 
-    for pin in BUTTONS:
-        btn = Button(pin=pin, pull_up=True, bounce_time=0.25)
-        btn.when_pressed = handle_button
+    t = threading.Thread(target=button_listener, daemon=True)
+    t.start()
 
     print("Listening for button presses...")
     signal.pause()
