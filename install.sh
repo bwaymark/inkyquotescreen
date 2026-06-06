@@ -14,19 +14,17 @@ echo "  Quaker Display — Installer"
 echo "========================================"
 echo ""
 
-# --- Check running as pi or with sudo ---
+# --- Check not running as root ---
 if [ "$EUID" -eq 0 ]; then
-  echo "Do not run this script as root. Run as the pi user: bash install.sh"
+  echo "Do not run this script as root. Run as your normal user: bash install.sh"
   exit 1
 fi
 
 # --- Copy files to install directory ---
 echo "[1/6] Copying files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR/quotes/images"
-
 cp quaker_display.py "$INSTALL_DIR/"
 
-# Only copy sample quotes if no quotes.json exists yet
 if [ ! -f "$INSTALL_DIR/quotes/quotes.json" ]; then
   cp quotes/quotes.json "$INSTALL_DIR/quotes/quotes.json"
   echo "      Sample quotes.json installed."
@@ -45,12 +43,13 @@ echo ""
 # --- Install Python dependencies ---
 echo "[3/6] Installing Python dependencies..."
 "$VENV_DIR/bin/pip" install --upgrade pip --quiet
-"$VENV_DIR/bin/pip" install "inky[rpi]" pillow --quiet
+"$VENV_DIR/bin/pip" install inky pillow --quiet
 echo ""
 
-# --- Install systemd service and timer ---
+# --- Install systemd service and timer (with real username and paths) ---
 echo "[4/6] Installing systemd service and timer..."
-sudo cp systemd/quaker-display.service /etc/systemd/system/
+sed "s|\$USER|$USER|g; s|/home/pi|/home/$USER|g; s|User=pi|User=$USER|g" \
+  systemd/quaker-display.service | sudo tee /etc/systemd/system/quaker-display.service > /dev/null
 sudo cp systemd/quaker-display.timer /etc/systemd/system/
 echo ""
 
@@ -69,12 +68,10 @@ echo ""
 echo "========================================"
 echo "  Installation complete."
 echo ""
-echo "  Quotes file:  $INSTALL_DIR/quotes/quotes.json"
+echo "  Quotes file:   $INSTALL_DIR/quotes/quotes.json"
 echo "  Images folder: $INSTALL_DIR/quotes/images/"
 echo ""
-echo "  The display will refresh every hour."
-echo "  Check status with:"
-echo "    sudo systemctl status quaker-display.timer"
-echo "    sudo journalctl -u quaker-display.service"
+echo "  Check status:  sudo systemctl status quaker-display.timer"
+echo "  View logs:     sudo journalctl -u quaker-display.service"
 echo "========================================"
 echo ""
