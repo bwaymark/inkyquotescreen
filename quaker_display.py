@@ -4,20 +4,17 @@ Quaker Quote Display for Inky Impression 7.3"
 - Shows a random quote over a random image on startup
 - Refreshes when any button is pressed
 - Also refreshes every 6 hours via systemd timer (SIGUSR1)
+- Button presses ignored while display is updating
 """
 
 import json
 import random
 import os
 import signal
+import threading
 from PIL import Image, ImageDraw, ImageFont
 from inky.auto import auto
 from gpiozero import Button
-import threading
-
-# Add this after the BUTTONS constant
-_updating = False
-_update_lock = threading.Lock()
 
 # --- Configuration ---
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -35,37 +32,11 @@ TEXT_MARGIN = 20
 # Button GPIO pins (A, B, C, D)
 BUTTONS = [5, 6, 16, 24]
 
-def handle_button(btn):
-    global _updating
-    with _update_lock:
-        if _updating:
-            print(f"Button pressed on GPIO {btn.pin.number} — ignored, update in progress")
-            return
-        _updating = True
-
-    try:
-        print(f"Button pressed on GPIO {btn.pin.number} — refreshing display")
-        update_display()
-    finally:
-        with _update_lock:
-            _updating = False
+# Update lock — prevents overlapping refreshes
+_updating = False
+_update_lock = threading.Lock()
 
 
-def handle_sigusr1(signum, frame):
-    global _updating
-    with _update_lock:
-        if _updating:
-            print("SIGUSR1 received — ignored, update in progress")
-            return
-        _updating = True
-
-    try:
-        print("Received SIGUSR1 — refreshing display")
-        update_display()
-    finally:
-        with _update_lock:
-            _updating = False
-            
 def load_quotes():
     with open(QUOTES_FILE, "r") as f:
         return json.load(f)
@@ -83,7 +54,6 @@ def pick_random_image():
 
 
 def crop_to_fill(image, target_width, target_height):
-    """Scale image to fill target dimensions, then centre-crop. No stretching."""
     img_ratio = image.width / image.height
     target_ratio = target_width / target_height
 
@@ -201,23 +171,40 @@ def update_display():
 
 
 def handle_button(btn):
-    print(f"Button pressed on GPIO {btn.pin.number} — refreshing display")
-    update_display()
+    global _updating
+    with _update_lock:
+        if _updating:
+            print(f"Button GPIO {btn.pin.number} — ignored, update in progress")
+            return
+        _updating = True
+    try:
+        print(f"Button pressed on GPIO {btn.pin.number} — refreshing display")
+        update_display()
+    finally:
+        with _update_lock:
+            _updating = False
 
 
 def handle_sigusr1(signum, frame):
-    print("Received SIGUSR1 — refreshing display")
-    update_display()
+    global _updating
+    with _update_lock:
+        if _updating:
+            print("SIGUSR1 received — ignored, update in progress")
+            return
+        _updating = True
+    try:
+        print("Received SIGUSR1 — refreshing display")
+        update_display()
+    finally:
+        with _update_lock:
+            _updating = False
 
 
 def main():
-    # Register SIGUSR1 handler for timer-triggered refreshes
     signal.signal(signal.SIGUSR1, handle_sigusr1)
 
-    # Show something on startup
     update_display()
 
-    # Set up button listeners
     for pin in BUTTONS:
         btn = Button(pin=pin, pull_up=True, bounce_time=0.25)
         btn.when_pressed = handle_button
