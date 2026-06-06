@@ -13,6 +13,11 @@ import signal
 from PIL import Image, ImageDraw, ImageFont
 from inky.auto import auto
 from gpiozero import Button
+import threading
+
+# Add this after the BUTTONS constant
+_updating = False
+_update_lock = threading.Lock()
 
 # --- Configuration ---
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -30,7 +35,37 @@ TEXT_MARGIN = 20
 # Button GPIO pins (A, B, C, D)
 BUTTONS = [5, 6, 16, 24]
 
+def handle_button(btn):
+    global _updating
+    with _update_lock:
+        if _updating:
+            print(f"Button pressed on GPIO {btn.pin.number} — ignored, update in progress")
+            return
+        _updating = True
 
+    try:
+        print(f"Button pressed on GPIO {btn.pin.number} — refreshing display")
+        update_display()
+    finally:
+        with _update_lock:
+            _updating = False
+
+
+def handle_sigusr1(signum, frame):
+    global _updating
+    with _update_lock:
+        if _updating:
+            print("SIGUSR1 received — ignored, update in progress")
+            return
+        _updating = True
+
+    try:
+        print("Received SIGUSR1 — refreshing display")
+        update_display()
+    finally:
+        with _update_lock:
+            _updating = False
+            
 def load_quotes():
     with open(QUOTES_FILE, "r") as f:
         return json.load(f)
