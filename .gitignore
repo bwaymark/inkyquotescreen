@@ -3,5 +3,3 @@ __pycache__/
 *.pyc
 *.log
 .DS_Store
-quotes/images/*
-!quotes/images/.gitkeep
