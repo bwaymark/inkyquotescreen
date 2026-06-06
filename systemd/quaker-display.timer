@@ -1,10 +1,10 @@
 [Unit]
-Description=Run Quaker Quote Display every hour
+Description=Refresh Quaker Display every 6 hours
 
 [Timer]
 OnBootSec=30sec
-OnUnitActiveSec=1h
-Unit=quaker-display.service
+OnUnitActiveSec=6h
+Unit=quaker-refresh.service
 
 [Install]
 WantedBy=timers.target

@@ -1,29 +1,34 @@
 #!/usr/bin/env python3
 """
 Quaker Quote Display for Inky Impression 7.3"
-- Rotates every hour via cron
-- Crops image to fill 800x480 without stretching
-- Overlays a legible quote with semi-transparent background
+- Shows a random quote over a random image on startup
+- Refreshes when any button is pressed
+- Also refreshes every 6 hours via systemd timer (SIGUSR1)
 """
 
 import json
 import random
 import os
-import sys
+import signal
 from PIL import Image, ImageDraw, ImageFont
 from inky.auto import auto
+from gpiozero import Button
 
 # --- Configuration ---
-QUOTES_FILE = os.path.expanduser("~/inkyquotescreen/quotes/quotes.json")
-IMAGES_DIR = os.path.expanduser("~/inkyquotescreen/quotes/images")
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+QUOTES_FILE = os.path.join(SCRIPT_DIR, "quotes", "quotes.json")
+IMAGES_DIR = os.path.join(SCRIPT_DIR, "quotes", "images")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 FONT_SIZE = 28
 SOURCE_FONT_SIZE = 20
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 480
-OVERLAY_OPACITY = 160       # 0-255: higher = darker overlay behind text
-OVERLAY_PADDING = 30        # padding inside the text overlay box
-TEXT_MARGIN = 20            # margin from screen edges for overlay box
+OVERLAY_OPACITY = 160
+OVERLAY_PADDING = 30
+TEXT_MARGIN = 20
+
+# Button GPIO pins (A, B, C, D)
+BUTTONS = [5, 6, 16, 24]
 
 
 def load_quotes():
@@ -48,23 +53,19 @@ def crop_to_fill(image, target_width, target_height):
     target_ratio = target_width / target_height
 
     if img_ratio > target_ratio:
-        # Image is wider than target — scale by height
         new_height = target_height
         new_width = int(img_ratio * new_height)
     else:
-        # Image is taller than target — scale by width
         new_width = target_width
         new_height = int(new_width / img_ratio)
 
     image = image.resize((new_width, new_height), Image.LANCZOS)
-
     left = (new_width - target_width) // 2
     top = (new_height - target_height) // 2
     return image.crop((left, top, left + target_width, top + target_height))
 
 
 def wrap_text(text, font, draw, max_width):
-    """Wrap text to fit within max_width pixels."""
     words = text.split()
     lines = []
     current_line = []
@@ -92,13 +93,11 @@ def draw_overlay(image, quote_text, source_text):
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         source_font = ImageFont.truetype(FONT_PATH, SOURCE_FONT_SIZE)
     except IOError:
-        # Fall back to default if font not found
         font = ImageFont.load_default()
         source_font = font
 
     max_text_width = SCREEN_WIDTH - (TEXT_MARGIN * 2) - (OVERLAY_PADDING * 2)
 
-    # Wrap quote and source
     quote_lines = wrap_text(f'"{quote_text}"', font, draw, max_text_width)
     source_lines = wrap_text(f"— {source_text}", source_font, draw, max_text_width)
 
@@ -108,38 +107,31 @@ def draw_overlay(image, quote_text, source_text):
 
     total_text_height = (
         len(quote_lines) * quote_line_height +
-        10 +  # gap between quote and source
+        10 +
         len(source_lines) * source_line_height
     )
 
     box_width = SCREEN_WIDTH - (TEXT_MARGIN * 2)
     box_height = total_text_height + (OVERLAY_PADDING * 2)
-
-    # Position overlay at bottom of screen
     box_x = TEXT_MARGIN
     box_y = SCREEN_HEIGHT - box_height - TEXT_MARGIN
 
-    # Draw semi-transparent dark rectangle
-    overlay_colour = (0, 0, 0, OVERLAY_OPACITY)
     draw.rectangle(
         [box_x, box_y, box_x + box_width, box_y + box_height],
-        fill=overlay_colour
+        fill=(0, 0, 0, OVERLAY_OPACITY)
     )
 
-    # Draw quote text
     y = box_y + OVERLAY_PADDING
     for line in quote_lines:
         draw.text(
             (box_x + OVERLAY_PADDING, y),
-            line,
-            font=font,
+            line, font=font,
             fill=(255, 255, 255, 255)
         )
         y += quote_line_height
 
-    y += 10  # gap
+    y += 10
 
-    # Draw source text in slightly dimmer white
     for line in source_lines:
         draw.text(
             (box_x + OVERLAY_PADDING, y),
@@ -152,8 +144,8 @@ def draw_overlay(image, quote_text, source_text):
     return image
 
 
-def main():
-    # Load data
+def update_display():
+    print("Updating display...")
     quotes = load_quotes()
     quote = random.choice(quotes)
     image_path = pick_random_image()
@@ -161,21 +153,42 @@ def main():
     print(f"Quote: {quote['text'][:60]}...")
     print(f"Image: {image_path}")
 
-    # Prepare image
     img = Image.open(image_path).convert("RGB")
     img = crop_to_fill(img, SCREEN_WIDTH, SCREEN_HEIGHT)
-
-    # Add overlay — convert to RGBA for transparency, then back to RGB
     img = img.convert("RGBA")
     img = draw_overlay(img, quote["text"], quote["source"])
     img = img.convert("RGB")
 
-    # Send to display
     inky = auto(ask_user=True, verbose=True)
     inky.set_image(img)
     inky.show()
-
     print("Done.")
+
+
+def handle_button(btn):
+    print(f"Button pressed on GPIO {btn.pin.number} — refreshing display")
+    update_display()
+
+
+def handle_sigusr1(signum, frame):
+    print("Received SIGUSR1 — refreshing display")
+    update_display()
+
+
+def main():
+    # Register SIGUSR1 handler for timer-triggered refreshes
+    signal.signal(signal.SIGUSR1, handle_sigusr1)
+
+    # Show something on startup
+    update_display()
+
+    # Set up button listeners
+    for pin in BUTTONS:
+        btn = Button(pin=pin, pull_up=True, bounce_time=0.25)
+        btn.when_pressed = handle_button
+
+    print("Listening for button presses...")
+    signal.pause()
 
 
 if __name__ == "__main__":

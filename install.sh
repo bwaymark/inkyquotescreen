@@ -4,8 +4,7 @@
 
 set -e
 
-INSTALL_DIR="/home/$USER/quaker-display"
-SERVICE_NAME="quaker-display"
+INSTALL_DIR="/home/$USER/inkyquotescreen"
 VENV_DIR="$INSTALL_DIR/venv"
 
 echo ""
@@ -43,26 +42,28 @@ echo ""
 # --- Install Python dependencies ---
 echo "[3/6] Installing Python dependencies..."
 "$VENV_DIR/bin/pip" install --upgrade pip --quiet
-"$VENV_DIR/bin/pip" install inky pillow --quiet
+"$VENV_DIR/bin/pip" install inky pillow gpiozero --quiet
 echo ""
 
-# --- Install systemd service and timer (with real username and paths) ---
+# --- Install systemd files with real username and paths substituted ---
 echo "[4/6] Installing systemd service and timer..."
-sed "s|\$USER|$USER|g; s|/home/pi|/home/$USER|g; s|User=pi|User=$USER|g" \
+sed "s|\$USER|$USER|g; s|\$INSTALL_DIR|$INSTALL_DIR|g" \
   systemd/quaker-display.service | sudo tee /etc/systemd/system/quaker-display.service > /dev/null
+sudo cp systemd/quaker-refresh.service /etc/systemd/system/
 sudo cp systemd/quaker-display.timer /etc/systemd/system/
 echo ""
 
 # --- Reload systemd and enable ---
-echo "[5/6] Enabling and starting timer..."
+echo "[5/6] Enabling service and timer..."
 sudo systemctl daemon-reload
+sudo systemctl enable quaker-display.service
 sudo systemctl enable quaker-display.timer
-sudo systemctl start quaker-display.timer
 echo ""
 
-# --- Run once immediately ---
-echo "[6/6] Running display update now..."
+# --- Start everything ---
+echo "[6/6] Starting service..."
 sudo systemctl start quaker-display.service
+sudo systemctl start quaker-display.timer
 echo ""
 
 echo "========================================"
@@ -71,7 +72,11 @@ echo ""
 echo "  Quotes file:   $INSTALL_DIR/quotes/quotes.json"
 echo "  Images folder: $INSTALL_DIR/quotes/images/"
 echo ""
-echo "  Check status:  sudo systemctl status quaker-display.timer"
-echo "  View logs:     sudo journalctl -u quaker-display.service"
+echo "  Buttons A/B/C/D refresh the display immediately."
+echo "  Display also refreshes every 6 hours automatically."
+echo ""
+echo "  Check status:  sudo systemctl status quaker-display.service"
+echo "  View logs:     sudo journalctl -u quaker-display.service -f"
+echo "  Manual refresh: sudo systemctl kill --signal=SIGUSR1 quaker-display.service"
 echo "========================================"
 echo ""

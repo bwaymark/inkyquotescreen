@@ -1,0 +1,6 @@
+[Unit]
+Description=Trigger Quaker Display refresh
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl kill --signal=SIGUSR1 quaker-display.service

@@ -1,18 +1,10 @@
 # Quaker Display
 
-A Raspberry Pi display for the [Pimoroni Inky Impression 7.3"](https://shop.pimoroni.com/products/inky-impression) that shows a rotating Quaker quote overlaid on a background image. Updates every hour.
+A Raspberry Pi display for the [Pimoroni Inky Impression 7.3"](https://shop.pimoroni.com/products/inky-impression) that shows a rotating Quaker quote overlaid on a background image.
 
-![Inky Impression 7.3" showing a quote over a landscape image](docs/preview.jpg)
-
----
-
-## Features
-
-- Randomly selects a quote from your `quotes.json`
-- Randomly selects a background image from your images folder
-- Centre-crops images to fill 800×480 without stretching or distorting
-- Semi-transparent overlay makes the quote legible over any image
-- Runs on boot and refreshes every hour via systemd
+- Refreshes every 6 hours automatically
+- Press any of the four buttons to refresh immediately
+- Randomly selects a quote and image each time
 
 ---
 
@@ -27,77 +19,69 @@ A Raspberry Pi display for the [Pimoroni Inky Impression 7.3"](https://shop.pimo
 
 ## Installation
 
-Clone the repo onto your Pi:
-
 ```bash
-git clone https://github.com/bwaymark/quaker-display.git
-cd quaker-display
+git clone https://github.com/bwaymark/inkyquotescreen.git
+cd inkyquotescreen
 bash install.sh
 ```
 
-That's it. The installer will:
-
-1. Copy files to `/home/pi/quaker-display/`
-2. Create a Python virtual environment
-3. Install `inky` and `pillow`
-4. Install and enable the systemd service and timer
-5. Run the display immediately
+The installer:
+1. Copies files to `~/inkyquotescreen/`
+2. Creates a Python virtual environment
+3. Installs `inky`, `pillow`, and `gpiozero`
+4. Installs and enables the systemd service and timer
+5. Starts the display immediately
 
 ---
 
-## Adding your own content
+## Adding content
 
 ### Quotes
 
-Edit `/home/pi/quaker-display/quotes/quotes.json`:
+Edit `~/inkyquotescreen/quotes/quotes.json`:
 
 ```json
 [
   {
     "text": "There is that of God in everyone.",
     "source": "George Fox"
-  },
-  {
-    "text": "Your quote here.",
-    "source": "Source"
   }
 ]
 ```
 
 ### Images
 
-Drop `.jpg`, `.png`, or `.webp` files into:
-
-```
-/home/pi/quaker-display/quotes/images/
-```
-
-Any resolution or aspect ratio works — images are cropped from the centre to fill the screen.
+Drop `.jpg`, `.png`, or `.webp` files into `~/inkyquotescreen/quotes/images/`. Any resolution works — images are centre-cropped to fill 800×480.
 
 ---
 
 ## Useful commands
 
-Check the timer is running:
 ```bash
-sudo systemctl status quaker-display.timer
+# Check service is running
+sudo systemctl status quaker-display.service
+
+# Live logs
+sudo journalctl -u quaker-display.service -f
+
+# Trigger a manual refresh
+sudo systemctl kill --signal=SIGUSR1 quaker-display.service
+
+# Restart the service
+sudo systemctl restart quaker-display.service
 ```
 
-View logs:
+---
+
+## Updating from GitHub
+
 ```bash
-sudo journalctl -u quaker-display.service
+cd ~/inkyquotescreen
+git pull
+bash install.sh
 ```
 
-Run manually:
-```bash
-sudo systemctl start quaker-display.service
-```
-
-Stop the hourly rotation:
-```bash
-sudo systemctl disable quaker-display.timer
-sudo systemctl stop quaker-display.timer
-```
+Your `quotes.json` and images are preserved on reinstall.
 
 ---
 
@@ -109,25 +93,16 @@ Edit `quaker_display.py` to adjust:
 |---|---|---|
 | `FONT_SIZE` | 28 | Main quote font size |
 | `SOURCE_FONT_SIZE` | 20 | Attribution font size |
-| `OVERLAY_OPACITY` | 160 | Darkness of overlay (0–255) |
+| `OVERLAY_OPACITY` | 160 | Overlay darkness (0–255) |
 | `OVERLAY_PADDING` | 30 | Padding inside text box |
 
 ---
 
-## Folder structure
+## How it works
 
-```
-quaker-display/
-  quaker_display.py       # Main script
-  install.sh              # Installer
-  quotes/
-    quotes.json           # Your quotes
-    images/               # Your background images
-  systemd/
-    quaker-display.service
-    quaker-display.timer
-  README.md
-```
+- `quaker-display.service` — runs permanently, listens for button presses
+- `quaker-display.timer` — fires every 6 hours, sends `SIGUSR1` to the running service
+- `quaker-refresh.service` — called by the timer, sends the signal
 
 ---
 
