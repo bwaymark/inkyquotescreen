@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Quaker Quote Display every hour
+
+[Timer]
+OnBootSec=30sec
+OnUnitActiveSec=1h
+Unit=quaker-display.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Quaker Quote Display for Inky Impression
+After=multi-user.target
+
+[Service]
+Type=oneshot
+User=pi
+ExecStart=/home/pi/quaker-display/venv/bin/python /home/pi/quaker-display/quaker_display.py
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
