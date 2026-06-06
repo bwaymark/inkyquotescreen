@@ -15,6 +15,7 @@ import threading
 from PIL import Image, ImageDraw, ImageFont
 from inky.auto import auto
 import gpiod
+from gpiod.line import Edge, Bias
 
 # --- Configuration ---
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -203,20 +204,27 @@ def handle_sigusr1(signum, frame):
 def button_listener():
     """Watch GPIO pins for button presses in a background thread."""
     try:
-        chip = gpiod.Chip('gpiochip0')
-        lines = chip.get_lines(BUTTONS)
-        lines.request(consumer='quaker-display', type=gpiod.LINE_REQ_EV_FALLING_EDGE)
-
-        while True:
-            events = lines.event_wait(sec=1)
-            if events:
-                for line in events:
-                    line.event_read()
-                    handle_button(line.offset())
+        with gpiod.request_lines(
+            "/dev/gpiochip0",
+            consumer="quaker-display",
+            config={
+                tuple(BUTTONS): gpiod.LineSettings(
+                    edge_detection=gpiod.line.Edge.FALLING,
+                    bias=gpiod.line.Bias.PULL_UP,
+                )
+            }
+        ) as request:
+            while True:
+                if request.wait_edge_events(1):  # 1 second timeout
+                    for event in request.read_edge_events():
+                        threading.Thread(
+                            target=handle_button,
+                            args=(event.line_offset,),
+                            daemon=True
+                        ).start()
     except Exception as e:
         print(f"Button listener error: {e}")
         print("Continuing without button support.")
-
 
 def main():
     signal.signal(signal.SIGUSR1, handle_sigusr1)
