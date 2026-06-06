@@ -4,7 +4,7 @@
 
 set -e
 
-INSTALL_DIR="/home/pi/quaker-display"
+INSTALL_DIR="/home/$USER/quaker-display"
 SERVICE_NAME="quaker-display"
 VENV_DIR="$INSTALL_DIR/venv"
 
