@@ -14,8 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 from inky.auto import auto
 
 # --- Configuration ---
-QUOTES_FILE = os.path.expanduser("~/quotes/quotes.json")
-IMAGES_DIR = os.path.expanduser("~/quotes/images")
+QUOTES_FILE = os.path.expanduser("~/inkyquotescreen/quotes/quotes.json")
+IMAGES_DIR = os.path.expanduser("~/inkyquotescreen/quotes/images")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 FONT_SIZE = 28
 SOURCE_FONT_SIZE = 20
